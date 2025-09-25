@@ -382,6 +382,7 @@
         if (!G.attack.value) return alert("Por favor, selecciona un tipo de ataque a simular.");
         G.statusMsg.innerHTML = '<span class="loader"></span> simulando...';
         G.btnSimulate.disabled = true;
+        console.log("Simulando ataque", G.client.value, G.attack.value);
         try {
             const payload = { client_id: parseInt(G.client.value, 10), attack: G.attack.value };
             const data = await fetchJSON("/api/simulate_attack", {
