@@ -125,8 +125,8 @@ Sigue estos pasos para levantar el proyecto en tu máquina.
 
 ### 1) Clonar el repositorio
 ```bash
-git clone https://github.com//baldomerothebridge/desafio.git
-cd desafio
+git clone https://github.com//baldomerothebridge/desafio2025.git
+cd desafio2025
 ```
 
 ### 2) Crear y activar entorno virtual
