@@ -5,9 +5,9 @@ Flask==3.0.3
 flask-cors==4.0.0 
 gunicorn==21.2.0
 requests==2.32.3
-pandas==2.2.2
+pandas==2.2.3
 sqlalchemy==2.0.30
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.10
 python-dotenv==1.0.1
 Faker==25.8.0
 cloudscraper==1.2.66
