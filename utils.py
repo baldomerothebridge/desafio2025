@@ -543,3 +543,80 @@ __all__ = [
     "crear_alerta_final", "clasificar_por_score_final",
     "get_country_for_ip", "get_ip_api_info", "get_network_enrichment"
 ]
+
+def is_ip(s: str) -> bool:
+    """Comprueba si una cadena parece ser una dirección IP v4."""
+    import re
+    return bool(re.match(r"^\d{1,3}(\.\d{1,3}){3}$", (s or "").strip()))
+
+def lookup_indicator(indicator: str) -> Dict[str, Any]:
+    """
+    Orquesta la consulta de un indicador (IP o dominio) a través de múltiples APIs.
+    No guarda nada en la base de datos.
+    """
+    indicator = (indicator or "").strip()
+    if not indicator:
+        return {"error": "El indicador no puede estar vacío."}
+
+    results = {"indicator": indicator, "type": "unknown"}
+    summary = {"risk_score": 0.0, "risk_level": "Inofensivo", "positive_detections": 0, "source_count": 0}
+    raw_data = {}
+
+    if is_ip(indicator):
+        results["type"] = "ip"
+        
+        # --- Consultas a APIs de IP ---
+        vt_data = consultar_virustotal_ip(indicator)
+        abuse_data = consultar_abuseipdb_ip(indicator)
+        otx_data = consultar_otx_ip(indicator)
+        ipqs_data = consultar_ipqs_ip(indicator)
+        
+        raw_data.update({"virustotal": vt_data, "abuseipdb": abuse_data, "otx": otx_data, "ipqualityscore": ipqs_data})
+
+        # --- Procesamiento y scoring ---
+        score_vt = score_from_virustotal(vt_data)
+        score_abuse = score_from_abuse(abuse_data)
+        score_otx = score_from_otx(otx_data)
+        
+        summary["risk_score"] = score_login_ip(vt_data, abuse_data, otx_data) # Reutilizamos el scoring de login
+        summary["risk_level"] = clasificar_por_score_final(summary["risk_score"])
+        
+        try:
+            summary["positive_detections"] = vt_data.get("data", {}).get("attributes", {}).get("last_analysis_stats", {}).get("malicious", 0)
+            summary["source_count"] = 3 # VT, AbuseIPDB, OTX
+        except: pass
+            
+        # --- Enriquecimiento de red ---
+        enrichment = get_network_enrichment(indicator, vt_json=vt_data, ipqs_json=ipqs_data)
+        results.update(enrichment)
+        results["country"] = get_country_for_ip(indicator, abuse_json=abuse_data)
+
+    else: # Asumimos que es un dominio/url
+        results["type"] = "domain"
+        
+        # --- Consultas a APIs de Dominio/URL ---
+        vt_data = consultar_virustotal_domain(indicator)
+        ipqs_data = consultar_ipqs_url(indicator)
+        
+        raw_data.update({"virustotal": vt_data, "ipqualityscore": ipqs_data})
+        
+        # --- Procesamiento y scoring ---
+        summary["risk_score"] = score_phishing_url(vt_data, ipqs_data)
+        summary["risk_level"] = clasificar_por_score_final(summary["risk_score"])
+        
+        try:
+            summary["positive_detections"] = vt_data.get("data", {}).get("attributes", {}).get("last_analysis_stats", {}).get("malicious", 0)
+            summary["source_count"] = 2 # VT, IPQS
+        except: pass
+
+    results["summary"] = summary
+    results["raw_data"] = raw_data
+    return results
+
+# -------------------
+# Export
+# -------------------
+__all__ = [
+    # (todas las funciones anteriores)
+    "lookup_indicator" 
+]

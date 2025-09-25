@@ -110,7 +110,7 @@
   @media (max-width:880px){
     .select{min-width:140px}
     .controls{flex-direction:column;align-items:flex-start}
-    .summories{flex-direction:column}
+    .summaries{flex-direction:column}
   }
 </style>
 </head>
@@ -124,7 +124,6 @@
       </div>
     </header>
 
-    <!-- CONTROLES -->
     <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
       <div class="card">
         <div style="display:flex;gap:8px;align-items:center">
@@ -134,14 +133,11 @@
           <span class="select-wrapper">
             <select id="attackSelect" class="select"></select>
           </span>
-          <!-- selector de estado -->
           <span class="select-wrapper">
             <select id="statusSelect" class="select" title="Filtrar por estado">
               <option value="">— Estado (todos) —</option>
             </select>
           </span>
-
-          <!-- selector de riesgo -->
           <span class="select-wrapper">
             <select id="riskSelect" class="select" title="Filtrar por riesgo">
               <option value="">— Riesgo (todos) —</option>
@@ -151,8 +147,6 @@
               <option value="critico">Crítico</option>
             </select>
           </span>
-
-          <!-- selector de periodo -->
           <span class="select-wrapper">
             <select id="periodSelect" class="select" title="Selecciona el periodo/últimos N">
               <option value="">— Periodo / Últimos —</option>
@@ -167,7 +161,6 @@
               <option value="50">50 últimos ataques</option>
             </select>
           </span>
-
           <button id="btnFetch" class="btn">Buscar</button>
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
@@ -187,15 +180,18 @@
             <div class="num small" id="lastUpdate">—</div>
             <div class="lbl">Última actualización</div>
           </div>
-          <div class="summary card">
-            <div class="num small" id="infoText">UI moderna</div>
-            <div class="lbl">Estado</div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <h3 style="margin:0 0 8px 0; font-size: 14px; color: var(--accent-2);">Análisis Rápido de Indicadores</h3>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="lookupInput" class="select" style="flex:1;" placeholder="Introduce IP o Dominio...">
+            <button id="btnLookup" class="btn">Consultar</button>
           </div>
+          <div id="lookupResultArea" style="margin-top:10px; font-size:13px;"></div>
         </div>
       </div>
     </div>
 
-    <!-- RESULTADOS -->
     <div class="table-wrap card" id="tableWrap" style="margin-top:14px;display:none">
       <table id="resultsTable" aria-live="polite">
         <thead id="resultsHead"></thead>
@@ -228,10 +224,13 @@
   const countDisplay = document.getElementById("countDisplay");
   const lastUpdate = document.getElementById("lastUpdate");
   const logArea = document.getElementById("logArea");
+  const lookupInput = document.getElementById("lookupInput");
+  const btnLookup = document.getElementById("btnLookup");
+  const lookupResultArea = document.getElementById("lookupResultArea");
 
-  const STATUS_MAP = {}; // id_status -> codigo
-  const STATUS_CODE_TO_ID = {}; // codigo -> id_status
-  const pendingChanges = new Map(); // id -> action ("check"/"dismiss")
+  const STATUS_MAP = {};
+  const STATUS_CODE_TO_ID = {};
+  const pendingChanges = new Map();
 
   function log(msg){
     const ts = new Date().toLocaleString();
@@ -263,18 +262,10 @@
 
       if(cResp.ok){
         clientSelect.innerHTML = `<option value="">— Todos —</option>` + cResp.clients.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join("");
-      } else {
-        clientSelect.innerHTML = `<option value="">Error</option>`;
-        log("Error cargando clientes: " + JSON.stringify(cResp));
-      }
-
+      } else { log("Error cargando clientes: " + JSON.stringify(cResp)); }
       if(tResp.ok){
         attackSelect.innerHTML = `<option value="">— Selecciona tipo —</option>` + tResp.types.map(t => `<option value="${escapeHtml(t.codigo)}">${escapeHtml(t.codigo)}</option>`).join("");
-      } else {
-        attackSelect.innerHTML = `<option value="">Error</option>`;
-        log("Error cargando tipos: " + JSON.stringify(tResp));
-      }
-
+      } else { log("Error cargando tipos: " + JSON.stringify(tResp)); }
       if(sResp.ok){
         const opts = sResp.status.map(s => {
           STATUS_MAP[s.id_status] = s.codigo;
@@ -282,10 +273,7 @@
           return `<option value="${escapeHtml(s.codigo)}">${escapeHtml(s.codigo)}</option>`;
         }).join("");
         statusSelect.innerHTML = `<option value="">— Estado (todos) —</option>` + opts;
-      } else {
-        log("Error cargando estados: " + JSON.stringify(sResp));
-      }
-
+      } else { log("Error cargando estados: " + JSON.stringify(sResp)); }
       status.textContent = "";
     }catch(err){
       status.textContent = "error";
@@ -305,12 +293,9 @@
   function showNoResultsMessage(clientName, attackLabel, periodCode) {
     const periodMap = {"24h":"las últimas 24h","7d":"los últimos 7 días","1m":"el último mes","3m":"los últimos 3 meses","6m":"los últimos 6 meses","1y":"el último año","10":"los 10 últimos ataques","20":"los 20 últimos ataques","50":"los 50 últimos ataques","": "el criterio seleccionado"};
     const periodText = periodMap[periodCode] || periodCode || "el periodo indicado";
-    let message;
-    if (clientName && clientName.trim() !== "— Todos —" && clientName.trim() !== "") {
-      message = `El cliente <strong>${escapeHtml(clientName)}</strong> no ha sufrido ningún ataque de tipo <strong>${escapeHtml(attackLabel)}</strong> en ${periodText}.`;
-    } else {
-      message = `No se han encontrado ataques de tipo <strong>${escapeHtml(attackLabel)}</strong> en ${periodText}.`;
-    }
+    let message = (clientName && clientName.trim() !== "— Todos —" && clientName.trim() !== "")
+      ? `El cliente <strong>${escapeHtml(clientName)}</strong> no ha sufrido ningún ataque de tipo <strong>${escapeHtml(attackLabel)}</strong> en ${periodText}.`
+      : `No se han encontrado ataques de tipo <strong>${escapeHtml(attackLabel)}</strong> en ${periodText}.`;
     tableWrap.style.display = "";
     tableWrap.innerHTML = `<div class="empty-message card">${message}</div>`;
     countDisplay.textContent = "0";
@@ -321,7 +306,7 @@
     const code = STATUS_MAP[id_status] || "new";
     if (code === "new") return { check: true, dismiss: true };
     if (code === "processing") return { check: false, dismiss: true };
-    return { check: false, dismiss: false }; // finished
+    return { check: false, dismiss: false };
   }
 
   function renderActionCell(row){
@@ -331,24 +316,10 @@
     const name = `action_${id}`;
     const checkedCheck = pendingChanges.get(id) === "check" ? "checked" : "";
     const checkedDismiss = pendingChanges.get(id) === "dismiss" ? "checked" : "";
-    return `
-      <div style="display:flex;gap:6px;align-items:center">
-        <label style="display:flex;gap:4px;opacity:${allow.check?1:0.45}">
-          <input type="radio" name="${name}" value="check" ${allow.check? "" : "disabled"} ${checkedCheck}
-                 onchange="window._onActionChange(${id}, 'check')"> check
-        </label>
-        <label style="display:flex;gap:4px;opacity:${allow.dismiss?1:0.45}">
-          <input type="radio" name="${name}" value="dismiss" ${allow.dismiss? "" : "disabled"} ${checkedDismiss}
-                 onchange="window._onActionChange(${id}, 'dismiss')"> dismiss
-        </label>
-      </div>
-    `;
+    return `<div style="display:flex;gap:6px;align-items:center"><label style="display:flex;gap:4px;opacity:${allow.check?1:0.45}"><input type="radio" name="${name}" value="check" ${allow.check? "" : "disabled"} ${checkedCheck} onchange="window._onActionChange(${id}, 'check')"> check</label><label style="display:flex;gap:4px;opacity:${allow.dismiss?1:0.45}"><input type="radio" name="${name}" value="dismiss" ${allow.dismiss? "" : "disabled"} ${checkedDismiss} onchange="window._onActionChange(${id}, 'dismiss')"> dismiss</label></div>`;
   }
-  window._onActionChange = (id, action) => {
-    if(action) pendingChanges.set(id, action);
-  };
+  window._onActionChange = (id, action) => { if(action) pendingChanges.set(id, action); };
 
-  // ----------- RENDER TABLE (añade columna "Reporte" junto a id_status_txt) -----------
   function renderTable(alerts, columnsOrder) {
     pendingChanges.clear();
     if(!alerts || alerts.length === 0){
@@ -357,119 +328,45 @@
       lastUpdate.textContent = new Date().toLocaleString();
       return;
     }
-
-    tableWrap.innerHTML = `
-      <table id="resultsTable" aria-live="polite">
-        <thead id="resultsHead"></thead>
-        <tbody id="resultsBody"></tbody>
-      </table>
-    `;
+    tableWrap.innerHTML = `<table id="resultsTable" aria-live="polite"><thead id="resultsHead"></thead><tbody id="resultsBody"></tbody></table>`;
     const _resultsHead = document.getElementById("resultsHead");
     const _resultsBody = document.getElementById("resultsBody");
-
     let keys = Array.isArray(columnsOrder) && columnsOrder.length ? columnsOrder : Object.keys(alerts[0]);
-
     const attack = (attackSelect.value || "").toLowerCase();
     if (attack === "phishing") keys = keys.filter(k => k.toLowerCase() !== "risk_level");
-
     const lower = keys.map(k => k.toLowerCase());
     const riesgoIdx = lower.indexOf("riesgo");
     const idStatusIdx = lower.indexOf("id_status_txt");
-
     let headCells = keys.map(k => `<th>${escapeHtml(k)}</th>`);
     if (idStatusIdx >= 0) headCells.splice(idStatusIdx + 1, 0, `<th>Reporte</th>`);
     if (riesgoIdx >= 0) headCells.splice(riesgoIdx+1 + (idStatusIdx >=0 && idStatusIdx <= riesgoIdx ? 1 : 0), 0, `<th>acción</th>`);
     else headCells.push(`<th>acción</th>`);
-
     _resultsHead.innerHTML = "<tr>" + headCells.join("") + "</tr>";
-
     _resultsBody.innerHTML = alerts.map(row => {
       const tds = keys.map((k) => {
         const key = k.toLowerCase();
         let v = row[k];
-
         if(key.includes("riesgo")) return `<td>${renderBadge(v)}</td>`;
         if(key === "score_final") return `<td>${escapeHtml(v)}</td>`;
-
         let s = v;
         if(typeof s === "string" && s.length > 120) s = s.slice(0,120) + "…";
         return `<td>${escapeHtml(s)}</td>`;
       });
-
       const alertId = row.id || row.ID || row.id_alerta || row["id"];
       const btnHtml = `<td><button class="btn warn btn-report" data-id="${alertId || ''}" data-attack="${escapeHtml(attack)}" title="Descargar informe">Descargar informe</button></td>`;
-
       if (idStatusIdx >= 0) tds.splice(idStatusIdx + 1, 0, btnHtml);
       else tds.push(btnHtml);
-
       if (riesgoIdx >= 0) {
         const insertPos = riesgoIdx + 1 + (idStatusIdx >= 0 && idStatusIdx <= riesgoIdx ? 1 : 0);
         tds.splice(insertPos, 0, `<td>${renderActionCell(row)}</td>`);
-      } else {
-        tds.push(`<td>${renderActionCell(row)}</td>`);
-      }
-
+      } else { tds.push(`<td>${renderActionCell(row)}</td>`); }
       return "<tr>" + tds.join("") + "</tr>";
     }).join("");
-
     tableWrap.style.display = "";
     countDisplay.textContent = String(alerts.length);
     lastUpdate.textContent = new Date().toLocaleString();
   }
 
-  // Delegación: descarga de informe por fila
-  tableWrap.addEventListener('click', async (ev) => {
-    const btn = ev.target.closest && ev.target.closest('.btn-report');
-    if (!btn) return;
-    const alertId = btn.getAttribute('data-id');
-    const attack = btn.getAttribute('data-attack') || attackSelect.value;
-    if(!alertId){
-      alert('ID de alerta no disponible para esta fila.');
-      return;
-    }
-    try {
-      btn.disabled = true;
-      btn.textContent = 'Descargando...';
-      const url = `/api/report_by_id?attack=${encodeURIComponent(attack)}&alert_id=${encodeURIComponent(alertId)}`;
-      const resp = await fetch(url, { method: 'GET' });
-      if (!resp.ok) {
-        const txt = await resp.text();
-        alert('Error al generar informe: ' + txt);
-        return;
-      }
-      const blob = await resp.blob();
-
-      // === Nombre del archivo: prioriza nuestro header, luego Content-Disposition, luego fallback ===
-      let fileName =
-        resp.headers.get('X-Report-Filename') ||
-        (()=>{
-          const cd = resp.headers.get('Content-Disposition') || '';
-          const m1 = cd.match(/filename\*=UTF-8''([^;]+)/);
-          if (m1 && m1[1]) return decodeURIComponent(m1[1]);
-          const m2 = cd.match(/filename="?([^"]+)"?/);
-          if (m2 && m2[1]) return m2[1];
-          return null;
-        })();
-      if (!fileName) fileName = `informe_${attack}_${alertId}.pdf`;
-
-      const urlBlob = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = urlBlob;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(urlBlob);
-    } catch (err) {
-      console.error(err);
-      alert('Error descargando informe: ' + err);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Descargar informe';
-    }
-  });
-
-  // ---- resto JS (sin cambios) ----
   async function getAlerts(limit){
     const client_id = clientSelect.value;
     const attack = attackSelect.value;
@@ -478,7 +375,6 @@
     const riskCode   = riskSelect.value;
     if(!attack) { alert("Selecciona un tipo de ataque."); return; }
     status.innerHTML = '<span class="loader"></span> consultando...';
-
     try{
       const params = new URLSearchParams();
       if(client_id) params.set("client_id", client_id);
@@ -487,19 +383,14 @@
       else if(limit) params.set("limit", String(limit));
       if(statusCode) params.set("status", statusCode);
       if(riskCode)   params.set("riesgo", riskCode);
-
       const r = await fetchJSON("/api/alerts?" + params.toString());
       if(!r.ok) throw new Error(JSON.stringify(r));
       const columnsOrder = Array.isArray(r.columns) ? r.columns : null;
-
       if(!r.alerts || r.alerts.length === 0) {
         const clientName = clientSelect.options[clientSelect.selectedIndex] ? clientSelect.options[clientSelect.selectedIndex].text : "";
         const attackLabel = attackSelect.options[attackSelect.selectedIndex] ? attackSelect.options[attackSelect.selectedIndex].text : attack;
         showNoResultsMessage(clientName, attackLabel, period || "");
-      } else {
-        renderTable(r.alerts || [], columnsOrder);
-      }
-
+      } else { renderTable(r.alerts || [], columnsOrder); }
       status.textContent = "";
       log(`Buscar: client=${client_id || 'Todos'} attack=${attack} period=${period || ('limit='+limit)} status=${statusCode || 'todos'} riesgo=${riskCode || 'todos'} -> ${r.count} filas`);
     }catch(err){
@@ -509,6 +400,7 @@
     }
   }
 
+  // --- EVENT LISTENERS (AHORA COMPLETOS) ---
   btnFetch.addEventListener("click", ()=> getAlerts(undefined));
 
   btnCSV.addEventListener("click", ()=> {
@@ -542,25 +434,20 @@
       });
       const j = await res.json();
       if(j.ok){
-        log("Simulación insertada: " + JSON.stringify(j.res));
-        // === NUEVO: si el backend devuelve la fila insertada, la mostramos sola ===
+        log("Simulación insertada: " + JSON.stringify(j.inserted));
         if (j.inserted && j.columns) {
           const row = Object.assign({}, j.inserted);
           const cols = Array.isArray(j.columns) ? j.columns.slice() : Object.keys(row);
-
-          // Sustituimos id_status por texto legible manteniendo la estética de la tabla
           const idx = cols.findIndex(c => String(c).toLowerCase() === 'id_status');
           if (idx >= 0) {
             row.id_status_txt = STATUS_MAP[row.id_status] || row.id_status;
             cols[idx] = 'id_status_txt';
           }
-
-          renderTable([row], cols); // reusa tu renderer sin cambiar estilos
+          renderTable([row], cols);
           tableWrap.style.display = "block";
           countDisplay.textContent = "1";
           lastUpdate.textContent = new Date().toLocaleString();
         } else {
-          // Fallback: comportamiento anterior
           alert("Simulación insertada correctamente.");
           getAlerts(20);
         }
@@ -583,7 +470,6 @@
     const changes = [];
     pendingChanges.forEach((action, id) => { changes.push({ id, action }); });
     if(changes.length === 0){ alert("No hay cambios seleccionados."); return; }
-
     try{
       const res = await fetch("/api/alerts/update-status", {
         method: "POST",
@@ -605,8 +491,90 @@
       alert("Error al guardar estados (ver log).");
     }
   });
+  
+  tableWrap.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest && ev.target.closest('.btn-report');
+    if (!btn) return;
+    const alertId = btn.getAttribute('data-id');
+    const attack = btn.getAttribute('data-attack') || attackSelect.value;
+    if(!alertId){ alert('ID de alerta no disponible para esta fila.'); return; }
+    try {
+      btn.disabled = true;
+      btn.textContent = 'Descargando...';
+      const url = `/api/report_by_id?attack=${encodeURIComponent(attack)}&alert_id=${encodeURIComponent(alertId)}`;
+      const resp = await fetch(url, { method: 'GET' });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        alert('Error al generar informe: ' + txt);
+        return;
+      }
+      const blob = await resp.blob();
+      let fileName = resp.headers.get('X-Report-Filename') || (()=>{ const cd = resp.headers.get('Content-Disposition') || ''; const m1 = cd.match(/filename\*=UTF-8''([^;]+)/); if (m1 && m1[1]) return decodeURIComponent(m1[1]); const m2 = cd.match(/filename="?([^"]+)"?/); if (m2 && m2[1]) return m2[1]; return null; })();
+      if (!fileName) fileName = `informe_${attack}_${alertId}.pdf`;
+      const urlBlob = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = urlBlob;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(urlBlob);
+    } catch (err) {
+      console.error(err);
+      alert('Error descargando informe: ' + err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Descargar informe';
+    }
+  });
 
-  // init
+  function renderLookupResults(data) {
+    if (!data || !data.results) {
+      lookupResultArea.innerHTML = `<p style="color:var(--danger);">Error: No se recibieron resultados válidos.</p>`;
+      return;
+    }
+    const r = data.results;
+    const summary = r.summary || {};
+    const riskBadge = renderBadge(summary.risk_level);
+    let detailsHtml = `<p style="margin:0;"><strong>Indicador:</strong> ${escapeHtml(r.indicator)} (${escapeHtml(r.type)})</p><p style="margin:4px 0;"><strong>Riesgo General:</strong> ${riskBadge}</p><ul style="margin:4px 0; padding-left: 20px; color: var(--muted);"><li>Score (0-10): <strong>${summary.score_final || summary.risk_score || 0}</strong></li><li>Detecciones Positivas (VT): <strong>${summary.positive_detections || 0}</strong></li>`;
+    if (r.type === 'ip') {
+      detailsHtml += `<li>País: <strong>${escapeHtml(r.country) || 'N/A'}</strong></li><li>ISP: <strong>${escapeHtml(r.isp) || 'N/A'}</strong></li>`;
+    }
+    detailsHtml += `</ul>`;
+    lookupResultArea.innerHTML = detailsHtml;
+  }
+
+  btnLookup.addEventListener("click", async () => {
+    const indicator = lookupInput.value.trim();
+    if (!indicator) {
+      alert("Por favor, introduce una IP o un dominio.");
+      return;
+    }
+    lookupResultArea.innerHTML = '<span class="loader"></span> Analizando...';
+    btnLookup.disabled = true;
+    try {
+      const res = await fetch("/api/lookup", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ indicator: indicator })
+      });
+      const j = await res.json();
+      if (j.ok) {
+        renderLookupResults(j);
+        log(`Consulta OK para: ${indicator}`);
+      } else {
+        lookupResultArea.innerHTML = `<p style="color:var(--danger);">Error: ${escapeHtml(j.error || 'Desconocido')}</p>`;
+        log(`Consulta Error para ${indicator}: ${JSON.stringify(j)}`);
+      }
+    } catch (err) {
+      lookupResultArea.innerHTML = `<p style="color:var(--danger);">Error de conexión con el servidor.</p>`;
+      log(`Consulta Exception: ${err}`);
+    } finally {
+      btnLookup.disabled = false;
+    }
+  });
+
+  // --- INICIALIZACIÓN ---
   loadClientsAndTypes();
 </script>
 </body>

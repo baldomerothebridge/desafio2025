@@ -50,7 +50,6 @@ def generate_ddos_alert(
     ip = pick_ip_from_db()
     now = datetime.now()
     fecha = now.strftime("%Y-%m-%d")
-    # --- LÍNEA CORREGIDA ---
     hora = now.strftime("%H:%M:%S")
 
     sources = random.choice(list(range(SRC_MIN, SRC_MAX + 1, SRC_STEP)))

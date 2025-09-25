@@ -10,28 +10,64 @@ import unicodedata
 from urllib.parse import quote
 from datetime import datetime, date, time as time_type, timedelta, timezone
 from decimal import Decimal
-from flask import send_file, make_response
 import informes
 from dos import generate_dos_alert
 from ddos import generate_ddos_alert
 from bruteforce import generate_alert as generate_bruteforce_alert
 from login import generate_alert as generate_login_alert
 from phishing import generate_alert as generate_phishing_alert
+import utils
 
-from flask import Flask, jsonify, send_from_directory, request, Response
+from flask import Flask, jsonify, send_from_directory, request, Response, send_file, make_response
 import bd
+
+# --- DB connection override (fix for "localhost:5432 connection refused") ---
+# Si defines DATABASE_URL o variables DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD,
+# forzamos a que bd._connect use estos valores en lugar de "localhost".
+try:
+    import psycopg2
+    def __connect_override():
+        url = os.getenv("DATABASE_URL", "").strip()
+        if url:
+            # Compatibilidad: postgres:// -> postgresql://
+            if url.startswith("postgres://"):
+                url = "postgresql://" + url[len("postgres://"):]
+            return psycopg2.connect(url, connect_timeout=5)
+        host = os.getenv("db_host", "localhost")
+        port = int(os.getenv("db_port", "5432"))
+        name = os.getenv("db_name", "")
+        user = os.getenv("db_user", "")
+        password = os.getenv("db_password", "")
+        if not all([host, port, name, user]):
+            # Si faltan datos, dejamos el conector original
+            return bd._connect()
+        return psycopg2.connect(
+            host=host, port=port, dbname=name, user=user, password=password, connect_timeout=5
+        )
+
+    # Solo parcheamos si hay config externa definida
+    if os.getenv("DATABASE_URL") or os.getenv("db_host"):
+        bd._connect = __connect_override
+except Exception as __e:
+    # No rompemos el arranque si algo falla aquí
+    print("DB override no aplicado:", __e, file=sys.stderr)
+# --- fin override DB ---
+
 from psycopg2 import sql
 
 from flask_cors import CORS
 
-app = Flask(__name__)
-CORS(app)  
+#app = Flask(__name__)
+app = Flask(__name__, static_folder='.', static_url_path='/static')
 
+# Lista de orígenes permitidos
+origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,https://proyecto-final-tripulaciones-f-s-bpzh.onrender.com").split(",")
+
+CORS(app, resources={r"/api/*": {"origins": origins}}, expose_headers=["X-Report-Filename", "Content-Disposition"])
 ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
     sys.path.append(ROOT)
 
-app = Flask(__name__, static_folder='.', static_url_path='/static')
 
 @app.route("/")
 def root_index():
@@ -209,14 +245,15 @@ def api_report_by_id():
 
         path, fname = informes.generate_pdf_for_id(attack, alert_id)
 
-        # envolvemos para poder añadir un header propio
         resp = make_response(send_file(
             path,
             as_attachment=True,
             download_name=fname,
             mimetype="application/pdf"
         ))
-        resp.headers["X-Report-Filename"] = fname   # nombre explícito para el front
+        resp.headers["X-Report-Filename"] = fname
+        # Añade el header CORS manualmente
+        # CORS header handled globally by Flask-CORS / after_request
         return resp
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "trace": traceback.format_exc()}), 500
@@ -386,7 +423,7 @@ def api_report_latest():
         return jsonify({"ok": False, "error": str(e), "trace": traceback.format_exc()}), 500
 
 
-# -------- Simulate (MODIFICADO para llamar a la lógica real)
+# -------- Simular ataque
 @app.route("/api/simulate_attack", methods=["POST"])
 def api_simulate_attack():
     try:
@@ -398,7 +435,7 @@ def api_simulate_attack():
             return jsonify({"ok": False, "error": "client_id y attack (válido) son obligatorios"}), 400
 
         # --- 2. MAPA DE FUNCIONES GENERADORAS ---
-        # Renombramos "fuerza_bruta" a "bruteforce" para que coincida con el módulo
+        
         attack_map = {
             "dos": generate_dos_alert,
             "ddos": generate_ddos_alert,
@@ -455,6 +492,42 @@ def api_update_status():
         return jsonify({"ok": True, **res})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "trace": traceback.format_exc()}), 500
+    
+@app.route("/api/lookup", methods=["POST"])
+def api_lookup_indicator():
+    """
+    Recibe un indicador (IP/dominio), lo analiza usando utils
+    y devuelve los resultados sin guardarlos en la BD.
+    """
+    try:
+        data = request.get_json(force=True)
+        indicator = data.get("indicator")
+        if not indicator:
+            return jsonify({"ok": False, "error": "El indicador es requerido."}), 400
+
+        # 2. Llamar a la nueva función de utils
+        results = utils.lookup_indicator(indicator)
+
+        if "error" in results:
+            return jsonify({"ok": False, "error": results["error"]}), 400
+        
+        # 3. Devolver los resultados saneados
+        return jsonify({"ok": True, "results": _sanitize_value(results)})
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "trace": traceback.format_exc()}), 500
+
+@app.after_request
+def add_cors_headers(response):
+    # Asegura cabeceras expuestas para lectura en el frontend
+    current = response.headers.get("Access-Control-Expose-Headers", "")
+    must = "X-Report-Filename, Content-Disposition"
+    if must not in current:
+        response.headers["Access-Control-Expose-Headers"] = (current + ", " + must).strip(", ").replace(", ,", ",")
+    return response
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)
+
+
+

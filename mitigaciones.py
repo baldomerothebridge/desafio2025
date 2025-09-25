@@ -2,7 +2,7 @@
 import os
 from docx import Document
 
-# Carpeta base del proyecto (donde está este archivo)
+# Carpeta base del proyecto
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Carpeta donde guardaste los .docx de mitigaciones
 DOCS_DIR = os.path.join(BASE_DIR, "mitigaciones")
@@ -28,7 +28,7 @@ def _docx_to_text(path: str) -> str:
         if p.text:
             parts.append(p.text.strip())
 
-    # Tablas (si las hubiera)
+    # Tablas 
     for table in doc.tables:
         for row in table.rows:
             cells = [c.text.strip() for c in row.cells if c.text]

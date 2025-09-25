@@ -47,7 +47,7 @@ def ensure_catalogs(conn=None):
         close_at_end = True
 
     with conn.cursor() as cur:
-        # clientes (si no lo tienes ya)
+        # clientes 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS clientes (
                 id_cliente SERIAL PRIMARY KEY,
@@ -246,7 +246,7 @@ def ensure_alert_tables(conn=None):
         conn.close()
 
 # -------------------------------------------------------------------------
-# Funciones de inserción (MODIFICADA para devolver la fila insertada y columnas)
+# Funciones de inserción
 # -------------------------------------------------------------------------
 def insert_alert_to_db(row: dict, table_name: str, cliente_nombre):
     """

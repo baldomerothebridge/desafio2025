@@ -6,7 +6,7 @@ import traceback
 from typing import Dict, Any, Optional
 from datetime import datetime
 
-# Asegura que los módulos locales se puedan importar
+# para que los módulos locales se puedan importar
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from bd import fetch_ip_malas, insert_alert_to_db
@@ -19,7 +19,7 @@ try:
         get_country_for_ip,
         get_network_enrichment,
         score_from_bruteforce,
-        clasificar_por_score_final # Usamos la función estándar de clasificación
+        clasificar_por_score_final
     )
 except Exception:
     consultar_abuseipdb_ip = None

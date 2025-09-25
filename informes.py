@@ -1,6 +1,4 @@
-# informes.py — PDF estilo ejemplo_1 (ReportLab) con márgenes simétricos,
-# mitigaciones tras tabla, texto justificado con interlineado 1.5,
-# y ESPACIADO ANTERIOR (12 pt) antes de los 5 títulos numerados solicitados.
+# informes.py
 # ---------------------------------------------------------------------------------
 
 import os
@@ -326,7 +324,6 @@ def _compose_pdf_from_row(attack: str, row: Dict[str, Any]) -> Tuple[str, str]:
             else:
                 # Estos cinco títulos: numerados y con ESPACIADO ANTERIOR de 12pt
                 if tnorm in TITLES_NUMBERED:
-                    # Espaciado anterior solicitado (12 pt) antes del título
                     if cursor_y - 12 < 3 * cm:
                         new_page()
                     else:
@@ -342,7 +339,7 @@ def _compose_pdf_from_row(attack: str, row: Dict[str, Any]) -> Tuple[str, str]:
                 cursor_y -= 16
 
         else:
-            # párrafos justificados (12 pt de espaciado anterior ya añadido en versión previa)
+            # párrafos justificados (12 pt de espaciado anterior)
             cursor_y -= 12
             cursor_y = _draw_justified_paragraph(
                 c, margin_lr, cursor_y, text, content_w,
